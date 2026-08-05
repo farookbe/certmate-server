@@ -120,6 +120,7 @@ installer/
   install.ps1
   upgrade.ps1
   uninstall.ps1
+  CertMateInstaller.iss   ; Inno Setup script to build single-exe installer (compile on Windows)
 
 scripts/
   validate.ps1
@@ -141,3 +142,55 @@ docs/
   troubleshooting.md
   security-notes.md
 ```
+
+Single-file installer (Inno Setup)
+
+This branch includes an Inno Setup script: installer/CertMateInstaller.iss. Compile this on a Windows machine with Inno Setup (ISCC) to produce a single EXE. The generated installer will extract the repository to the chosen Program Files folder and then run the bundled installer PowerShell script (installer/install.ps1) with elevated privileges to perform the full CertMate installation and register the Windows service (WinSW).
+
+Notes:
+- PrivilegesRequired=admin in the .iss means the installer will request elevation.
+- The actual CertMate source is downloaded during installation by install.ps1; the installer EXE only bundles the wrapper and scripts to perform a zero-touch deployment.
+
+Certificate import and download API
+
+The installer now creates a small API module (modules/web/certificates_api.py) and auto-registers it with app.py. This provides two endpoints to manage certificates from the dashboard or via HTTP calls:
+
+1) POST /api/certificates/import
+- Accepts multipart/form-data with either:
+  - 'cert' (PEM) and 'key' (PEM) files, OR
+  - 'pfx' file and form field 'pfx_password' for the uploaded PFX
+- The certificate is stored under the server's certificates directory as <CN> with dots replaced by underscores. Example: CN api.example.com -> api_example_com.crt and api_example_com.key
+- Returns JSON {"status": "ok", "cn": "<common name>"} on success.
+
+2) POST /api/certificates/download
+- Requires form fields: 'cn' (the certificate common name), 'format' ('pfx' or 'crt'), and for 'pfx' a 'password' to protect the exported PFX.
+- Returns the certificate as an attachment. The filename will be the CN with dots replaced by underscores, e.g. api_example_com.pfx.
+- PFX export requires the caller to supply the password (the server will not store PFX passwords).
+
+Security considerations
+
+- PFX exports require a password. The implementation requires the caller to provide the password at download time.
+- Private keys are stored on disk under the CertMate install path; protect the install directory and limit access to administrators.
+- This branch installs the Python cryptography package to support safe PFX handling.
+
+Examples (curl):
+
+Import PEM cert+key:
+
+```bash
+curl -F "cert=@./site.crt" -F "key=@./site.key" https://certmate-host/api/certificates/import
+```
+
+Import a pfx (server will require the pfx password):
+
+```bash
+curl -F "pfx=@./site.pfx" -F "pfx_password=secret" https://certmate-host/api/certificates/import
+```
+
+Download PFX (POST):
+
+```bash
+curl -X POST -F "cn=api.example.com" -F "format=pfx" -F "password=exportPass" https://certmate-host/api/certificates/download -o api_example_com.pfx
+```
+
+Please review and tell me if you want a different installer behaviour (MSI instead), additional CA integrations (Venafi/DigiCert), or a UI change in the dashboard to surface these import/export actions.
