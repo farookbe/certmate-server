@@ -252,6 +252,126 @@ if os.name == "nt":
         if (!(Test-Path $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
         Set-Content $target $shim -Encoding UTF8
     }
+
+    # Create a small certificates API module to support import and PFX download
+    try {
+        $apiDir = Join-Path $Root "modules\web"
+        if (!(Test-Path $apiDir)) { New-Item -ItemType Directory -Path $apiDir -Force | Out-Null }
+        $apiFile = Join-Path $apiDir "certificates_api.py"
+        $apiContent = @'
+from flask import request, jsonify, Response
+import os
+from cryptography import x509
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, BestAvailableEncryption
+from cryptography.hazmat.primitives.serialization import serialization
+from cryptography.hazmat.primitives.serialization.pkcs12 import serialize_key_and_certificates
+
+
+def register_certificate_routes(app):
+def _normalize_cn(cn: str) -> str:
+    return cn.replace('.', '_') if cn else 'unknown'
+
+@app.route('/api/certificates/import', methods=['POST'])
+def import_certificate():
+    cert_file = request.files.get('cert')
+    key_file = request.files.get('key')
+    pfx_file = request.files.get('pfx')
+    pfx_password = request.form.get('pfx_password')
+    certs_dir = os.path.join(os.getcwd(), 'certificates')
+    os.makedirs(certs_dir, exist_ok=True)
+
+    if pfx_file:
+        data = pfx_file.read()
+        from cryptography.hazmat.primitives.serialization.pkcs12 import load_key_and_certificates
+        if not pfx_password:
+            return jsonify({'error': 'pfx_password required for uploaded pfx'}), 400
+        try:
+            priv, cert, add_certs = load_key_and_certificates(data, pfx_password.encode())
+        except Exception as e:
+            return jsonify({'error': f'Invalid pfx: {e}'}), 400
+    else:
+        if not cert_file or not key_file:
+            return jsonify({'error': 'cert and key required'}), 400
+        cert_pem = cert_file.read()
+        key_pem = key_file.read()
+        try:
+            cert = x509.load_pem_x509_certificate(cert_pem)
+        except Exception as e:
+            return jsonify({'error': f'Invalid certificate: {e}'}), 400
+        try:
+            priv = load_pem_private_key(key_pem, password=None)
+        except Exception as e:
+            return jsonify({'error': f'Invalid private key: {e}'}), 400
+        add_certs = None
+
+    # determine CN
+    cn = None
+    try:
+        for attr in cert.subject:
+            # commonName OID is 2.5.4.3
+            if getattr(attr.oid, 'dotted_string', '') == '2.5.4.3':
+                cn = attr.value
+                break
+        if not cn:
+            cn = cert.subject.rfc4514_string()
+    except Exception:
+        cn = 'unknown'
+
+    fname = _normalize_cn(cn)
+    cert_path = os.path.join(certs_dir, f'{fname}.crt')
+    key_path = os.path.join(certs_dir, f'{fname}.key')
+    with open(cert_path, 'wb') as f:
+        f.write(cert.public_bytes(Encoding.PEM))
+    with open(key_path, 'wb') as f:
+        f.write(priv.private_bytes(Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()))
+
+    return jsonify({'status': 'ok', 'cn': cn}), 201
+
+@app.route('/api/certificates/download', methods=['POST'])
+def download_certificate():
+    cn = request.form.get('cn')
+    fmt = request.form.get('format', 'pfx')
+    password = request.form.get('password')
+    if not cn:
+        return jsonify({'error': 'cn required'}), 400
+    fname = _normalize_cn(cn)
+    certs_dir = os.path.join(os.getcwd(), 'certificates')
+    cert_path = os.path.join(certs_dir, f'{fname}.crt')
+    key_path = os.path.join(certs_dir, f'{fname}.key')
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        return jsonify({'error': 'certificate or key not found'}), 404
+
+    if fmt == 'pfx':
+        if not password:
+            return jsonify({'error': 'password required for pfx'}), 400
+        with open(cert_path, 'rb') as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        with open(key_path, 'rb') as f:
+            key = load_pem_private_key(f.read(), password=None)
+        pfx = serialize_key_and_certificates(fname.encode(), key, cert, None, BestAvailableEncryption(password.encode()))
+        out_name = f'{fname}.pfx'
+        return Response(pfx, mimetype='application/x-pkcs12', headers={'Content-Disposition': f'attachment; filename="{out_name}"'})
+    else:
+        with open(cert_path, 'rb') as f:
+            data = f.read()
+        out_name = f'{fname}.crt'
+        return Response(data, mimetype='application/x-pem-file', headers={'Content-Disposition': f'attachment; filename="{out_name}"'})
+'@
+        Set-Content $apiFile $apiContent -Encoding UTF8
+
+        # Append an auto-register call into app.py so routes are available
+        $registration = @'
+try:
+from modules.web.certificates_api import register_certificate_routes
+register_certificate_routes(app)
+except Exception:
+pass
+'@
+        Add-Content $appPy $registration -Encoding UTF8
+    } catch {
+        Write-Warn "Failed to create certificates API module: $_"
+    }
+
     Write-Ok "Windows patches applied"
 }
 
@@ -313,6 +433,8 @@ Write-Step "Installing Python dependencies"
 & $VenvPython -m pip install --upgrade pip setuptools wheel
 & $VenvPython -m pip install --no-cache-dir -r (Join-Path $InstallRoot "requirements.txt")
 & $VenvPython -m pip install --upgrade requests certifi urllib3
+# Install cryptography for PFX import/export support
+& $VenvPython -m pip install --upgrade cryptography
 
 Patch-CertMateWindows -Root $InstallRoot -VenvPython $VenvPython
 Write-CertMateEnv -Root $InstallRoot -Port $Port -HostAddress $HostAddress
