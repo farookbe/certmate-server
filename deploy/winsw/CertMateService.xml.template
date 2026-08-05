@@ -1,0 +1,20 @@
+<service>
+  <id>CertMate</id>
+  <name>CertMate Certificate Manager</name>
+  <description>CertMate SSL certificate management system running with WinSW on Windows Server.</description>
+  <executable>__INSTALL_ROOT__\venv\Scripts\python.exe</executable>
+  <arguments>-u app.py</arguments>
+  <workingdirectory>__INSTALL_ROOT__</workingdirectory>
+  <env name="PYTHONUNBUFFERED" value="1" />
+  <env name="PYTHONIOENCODING" value="utf-8" />
+  <env name="PYTHONUTF8" value="1" />
+  <env name="HOST" value="__HOST__" />
+  <env name="PORT" value="__PORT__" />
+  <logpath>__INSTALL_ROOT__\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+  <onfailure action="restart" delay="10 sec" />
+  <resetfailure>1 hour</resetfailure>
+</service>

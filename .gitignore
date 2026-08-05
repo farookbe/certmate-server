@@ -1,0 +1,44 @@
+# Local runtime state
+.env
+*.env.local
+settings.json
+settings.*.json
+
+# CertMate runtime data
+/data/
+/certificates/
+/logs/
+/backups/
+/letsencrypt/
+/acme-challenges/
+
+# Secrets and certificates
+*.key
+*.pem
+*.pfx
+*.p12
+*.cer
+*.crt
+*.csr
+*.jks
+*.keystore
+*.secret
+*.token
+
+# Python/runtime
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Installer temporary outputs
+*.zip
+*.bak*
+*.tmp
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
