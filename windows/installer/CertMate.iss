@@ -20,7 +20,7 @@
   #define UPSTREAM_VERSION "2.55.1"
 #endif
 #ifndef WINDOWS_REVISION
-  #define WINDOWS_REVISION "1"
+  #define WINDOWS_REVISION "2"
 #endif
 
 [Setup]
@@ -159,6 +159,23 @@ begin
 end;
 
 // --- Post-install validation ------------------------------------------------
+//
+// Inno 7.x "Type Mismatch" gotcha: the Pascal named constants HKLM/HKCU/HKCR
+// are emitted as 64-bit HKEY literals in Inno 7.1+, but the RegKeyExists /
+// RegQueryStringValue runtime dispatch layer still declares its RootKey
+// parameter with the 32-bit HKEY integer type. Passing HKLM directly raises
+// a runtime "Type Mismatch" at the first RegKeyExists call - this is the
+// "Runtime error (at 9:1397): Type Mismatch" that fires on a clean
+// Windows Server 2025 install. The portable, type-safe fix is to pass an
+// explicit plain-integer literal (a 32-bit value) rather than the named
+// HKEY identifier. HKEY_LOCAL_MACHINE is the Win32 value 0x80000002.
+//
+// Inno Pascal's `const` block does not allow a type annotation, so declare
+// it as a plain (untyped) integer constant - Inno treats it as Integer.
+// Hex literals use the Inno Pascal `$` prefix (not the C-style `0x`).
+const
+  HKLM_INT = $80000002;  // HKEY_LOCAL_MACHINE (Win32) as an explicit integer
+
 function PostInstallValidation: Boolean;
 var
   exePath: String;
@@ -167,8 +184,8 @@ begin
   Result := True;
   ok := True;
 
-  // 1. service registered in the registry
-  if not RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\CertMate') then
+  // 1. service registered in the registry (explicit integer root; type-safe)
+  if not RegKeyExists(HKLM_INT, 'SYSTEM\CurrentControlSet\Services\CertMate') then
   begin
     ok := False;
     Log('CertMate post-install FAIL: CertMate service not registered');
