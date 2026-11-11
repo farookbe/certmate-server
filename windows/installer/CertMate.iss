@@ -20,7 +20,7 @@
   #define UPSTREAM_VERSION "2.55.1"
 #endif
 #ifndef WINDOWS_REVISION
-  #define WINDOWS_REVISION "3"
+  #define WINDOWS_REVISION "4"
 #endif
 
 [Setup]
@@ -129,6 +129,15 @@ begin
 end;
 
 // --- Pre-flight: runs before any files are copied ---------------------------
+// NOTE: Inno 7.x Pascal has a known ETypeMismatch bug when a String literal
+// is concatenated with the char literals #13 / #10 (CRLF) inside MsgBox /
+// Log calls - the runtime dispatcher does not coerce Char to String and
+// raises "Type Mismatch" at a function-specific bytecode offset (the
+// "Runtime error (at 9:1079)" seen on clean Windows Server 2025). To keep
+// the [Code] section runtime-stable across Inno 7.x, every user-facing
+// message below is a single-line string literal with NO #13 / #10 / char
+// concatenation. Multi-line output is achieved by issuing several Log()
+// calls instead, each a plain literal.
 function PreflightChecks: Boolean;
 var
   appDataCertMate: String;
@@ -139,8 +148,8 @@ begin
   if not IsAdmin then
   begin
     Log('CertMate pre-flight FAIL: not running as admin');
-    MsgBox('CertMate requires an elevated (administrator) shell to install.'
-           + #13#10 + 'Re-launch the installer as Administrator.', mbError, 'CertMate');
+    MsgBox('CertMate requires an elevated (administrator) shell. Re-launch the installer as Administrator.',
+           mbError, 'CertMate');
     Result := False;
     Exit;
   end;
@@ -203,26 +212,17 @@ begin
   if ok then
   begin
     Log('CertMate post-install validation PASSED');
-    MsgBox('CertMate install validated. The service was registered and started.'
-          + #13#10 + #13#10
-          + 'Next steps:'
-          + #13#10
-          + '  1. Open http://127.0.0.1:8000/ and complete the admin bootstrap wizard.'
-          + #13#10
-          + '  2. PFX export:  CertMateService.exe export-pfx <domain> --password-file <f>'
-          + #13#10
-          + '  3. Update check: CertMateService.exe check-update'
-          + #13#10
-          + '  4. Apply update: CertMateService.exe update --target vX.Y.Z --admin-approval',
+    Log('Next steps: 1) Open http://127.0.0.1:8000/ and complete the admin bootstrap wizard.');
+    Log('Next steps: 2) PFX export: CertMateService.exe export-pfx <domain> --password-file <f>');
+    Log('Next steps: 3) Update check: CertMateService.exe check-update');
+    Log('Next steps: 4) Apply update: CertMateService.exe update --target vX.Y.Z --admin-approval');
+    MsgBox('CertMate install validated. The service was registered and started. Next steps are in setup.log.',
            mbInformation, 'CertMate - Install Complete');
   end
   else
   begin
     Log('CertMate post-install validation FAILED');
-    MsgBox('CertMate installed but post-install validation failed. '
-          + #13#10 + 'See the installer log at '
-          + ExpandConstant('{common}\Inno Setup\setup.log')
-          + ' (or C:\ProgramData\Inno Setup\setup.log on Server) for details.',
+    MsgBox('CertMate installed but post-install validation failed. See C:\ProgramData\Inno Setup\setup.log for details.',
            mbError, 'CertMate');
     Result := False;
   end;
