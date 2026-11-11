@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CertMateService</AssemblyName>
+    <RootNamespace>CertMate.Service</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The service host ships self-contained so the installer needs no
+         manual .NET runtime step. -->
+    <SelfContained>true</SelfContained>
+    <Version>1.0.0</Version>
+    <Product>CertMate Windows Service Host</Product>
+    <Company>PFR / CertMate Windows</Company>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Windows.Compatibility" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Ship the Python engine tools (PFX export + updater) next to the exe so
+       the `export-pfx` / `check-update` / `update` subcommands can find them
+       relative to the assembly. -->
+  <ItemGroup>
+    <None Include="..\..\tools\export_pfx.py" Link="tools\export_pfx.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\tools\updater.py" Link="tools\updater.py" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      All .cs files in this project directory are included automatically by the
+      Microsoft.NET.Sdk default globbing (EnableDefaultCompileItems=true). No
+      explicit <Compile> items are needed. The original project explicitly
+      listed 6 of the 7 source files, which both caused NETSDK1022
+      (duplicate compile items) and omitted SecretBootstrap.cs — so the
+      project failed to build on every modern SDK.
+    -->
+  </ItemGroup>
+
+</Project>
