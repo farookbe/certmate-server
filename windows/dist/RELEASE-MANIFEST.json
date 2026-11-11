@@ -1,0 +1,11 @@
+{
+  "schema": "certmate-windows.release-manifest/v1",
+  "upstream_version": "v2.55.1",
+  "windows_revision": 2,
+  "installer": "CertMate-Windows-v2.55.1-r2-x64.exe",
+  "installer_sha256": "96B9B9EC2D4279F96B75997EEEBCFDA6EFCF69BAA846798BAB795C04ECBC586F",
+  "build_date_utc": "2026-11-11T04:46:41Z",
+  "build_host": "C:\\Dev-projects\\certmate-server-main (dev, Inno Setup 7.1.0)",
+  "target_platform": "Windows Server 2025 x64",
+  "notes": "Windows revision 2: (1) self-contained .NET 8 publish (no separate .NET runtime step needed); (2) PFX export + upstream-update engine tools shipped under {app}\\tools, exposed as `CertMateService.exe export-pfx` / `check-update` / `update` subcommands; (3) pre-flight checks, post-install validation, and installer logging in the Inno [Code] section. ProgramData is preserved on upgrade and on uninstall. This build (r2, 2026-11-11) fixes the 'Runtime error (at 9:1397): Type Mismatch' that fired on a clean Windows Server 2025 install: the Inno [Code] section's RegKeyExists call was passing the Pascal named constant HKLM (emitted as a 64-bit HKEY literal in Inno 7.1+) into a 32-bit HKEY-parametered function, which the runtime dispatch layer rejects with a type mismatch. The fix declares an explicit 32-bit integer constant HKLM_INT = $80000002 (HKEY_LOCAL_MACHINE) and passes that instead. Upstream v2.55.1 application tree + embedded Python are NOT in this payload (skipped network step on the dev build host); this revision ships the self-contained .NET host + PFX/updater tools + docs + service registration + pre/post checks only. A full end-to-end build (with upstream source + Python 3.12 embeddable staged under {app}\\app and {app}\\python) requires running Build-Release.ps1 on a networked build host."
+}
