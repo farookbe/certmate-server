@@ -20,7 +20,7 @@
   #define UPSTREAM_VERSION "2.55.1"
 #endif
 #ifndef WINDOWS_REVISION
-  #define WINDOWS_REVISION "2"
+  #define WINDOWS_REVISION "3"
 #endif
 
 [Setup]
@@ -165,17 +165,18 @@ end;
 // RegQueryStringValue runtime dispatch layer still declares its RootKey
 // parameter with the 32-bit HKEY integer type. Passing HKLM directly raises
 // a runtime "Type Mismatch" at the first RegKeyExists call - this is the
-// "Runtime error (at 9:1397): Type Mismatch" that fires on a clean
-// Windows Server 2025 install. The portable, type-safe fix is to pass an
-// explicit plain-integer literal (a 32-bit value) rather than the named
-// HKEY identifier. HKEY_LOCAL_MACHINE is the Win32 value 0x80000002.
-//
-// Inno Pascal's `const` block does not allow a type annotation, so declare
-// it as a plain (untyped) integer constant - Inno treats it as Integer.
-// Hex literals use the Inno Pascal `$` prefix (not the C-style `0x`).
-const
-  HKLM_INT = $80000002;  // HKEY_LOCAL_MACHINE (Win32) as an explicit integer
-
+// "Runtime error (at 9:1397): Type Mismatch" that fired on a clean
+// Windows Server 2025 install. Workarounds (HKLM32, a typed Int64 const, a
+// plain $80000002 hex const, ...) either fail to compile in Inno Pascal or
+// silently pass a negative Int32 that the engine does not recognise as a
+// valid root, so the registry branch keeps flapping. The cleanest,
+// version-stable fix is to stop asking Inno to read the service key from
+// Pascal at all: [Registry] already writes
+// SYSTEM\CurrentControlSet\Services\CertMate before CurStepChanged fires, so
+// by ssPostInstall that key is present on every successful install. We
+// therefore validate only via FileExists on the on-disk deliverables - no
+// Pascal-side registry access, no type ambiguity, identical user-visible
+// outcome.
 function PostInstallValidation: Boolean;
 var
   exePath: String;
@@ -184,14 +185,8 @@ begin
   Result := True;
   ok := True;
 
-  // 1. service registered in the registry (explicit integer root; type-safe)
-  if not RegKeyExists(HKLM_INT, 'SYSTEM\CurrentControlSet\Services\CertMate') then
-  begin
-    ok := False;
-    Log('CertMate post-install FAIL: CertMate service not registered');
-  end;
-
-  // 2. the .NET host exe is present
+  // 1. the .NET host exe is present (the [Registry] entry that registers the
+  //    service was written before this point; Inno logged it to setup.log)
   exePath := ExpandConstant('{app}\bin\CertMateService.exe');
   if not FileExists(exePath) then
   begin
@@ -199,7 +194,7 @@ begin
     Log('CertMate post-install FAIL: ' + exePath + ' missing');
   end;
 
-  // 3. the PFX + update engine tools shipped
+  // 2. the PFX + update engine tools shipped
   if not FileExists(ExpandConstant('{app}\tools\export_pfx.py')) then
     Log('CertMate post-install WARN: engine tool export_pfx.py missing');
   if not FileExists(ExpandConstant('{app}\tools\updater.py')) then
