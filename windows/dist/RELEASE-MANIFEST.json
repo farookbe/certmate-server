@@ -1,14 +1,14 @@
 {
   "schema": "certmate-windows.release-manifest/v1",
   "upstream_version": "v2.55.1",
-  "windows_revision": 3,
-  "installer": "CertMate-Windows-v2.55.1-r3-x64.exe",
-  "installer_sha256": "CBE69634BDED9A4A1F0F2BF4920CE0B9AE8AD1A0EC6DE9B954D8DAA040D3190F",
-  "build_date_utc": "2026-11-11T05:58:53Z",
+  "windows_revision": 4,
+  "installer": "CertMate-Windows-v2.55.1-r4-x64.exe",
+  "installer_sha256": "2DD2464460911F4DC9EEE0BBF89A9461755708A4BAF7635AACADBE2EA329BABD",
+  "build_date_utc": "2026-11-11T06:14:00Z",
   "target_platform": "Windows Server 2025 x64",
   "supersedes": [
-    "CertMate-Windows-v2.55.1-r2-x64.exe (SHA-256 96B9B9EC2D4279F96B75997EEEBCFDA6EFCF69BAA846798BAB795C04ECBC586F)",
-    "CertMate-Windows-v2.55.1-r1-x64.exe (SHA-256 5B21BD518C25E61F688ADB6A2FB5D391B168B60CEAE8FBC0B0295F2CEE4E1058)"
+    "CertMate-Windows-v2.55.1-r3-x64.exe (SHA-256 CBE69634BDED9A4A1F0F2BF4920CE0B9AE8AD1A0EC6DE9B954D8DAA040D3190F)",
+    "CertMate-Windows-v2.55.1-r2-x64.exe (SHA-256 96B9B9EC2D4279F96B75997EEEBCFDA6EFCF69BAA846798BAB795C04ECBC586F)"
   ],
-  "notes": "Windows revision 3. Fixes the 'Runtime error (at 9:1397): Type Mismatch' and the follow-on 'setup did not work' report on clean Windows Server 2025. r2 had replaced the Pascal named constant HKLM with an explicit $80000002 integer root, but Inno Pascal treats a plain untyped hex const as a signed 32-bit Int32, so $80000002 evaluates to -2147483646, which Inno's RegKeyExists engine does not recognise as HKEY_LOCAL_MACHINE - the service-key branch still misfired. r3 removes the Pascal-side registry read entirely: [Registry] writes SYSTEM\\CurrentControlSet\\Services\\CertMate before CurStepChanged fires, so by ssPostInstall that key is present on every successful install; post-install validation now checks only the on-disk deliverables (CertMateService.exe, export_pfx.py, updater.py) via FileExists. No named HKEY constant, no typed const, no hex literal - no type-ambiguity surface remains in the [Code] section. r3 also keeps the self-contained .NET 8 host + PFX/updater tools + docs + service registration + pre/post checks. Upstream v2.55.1 application tree + embedded Python are NOT in this payload (skipped network step on the dev build host); this revision ships the self-contained .NET host + PFX/updater tools + docs + service registration + pre/post checks only. A full end-to-end build (with upstream source + Python 3.12 embeddable staged under {app}\\app and {app}\\python) requires running Build-Release.ps1 on a networked build host."
+  "notes": "Windows revision 4. Fixes 'Runtime error (at 9:1079): Type Mismatch' on clean Windows Server 2025. Root cause: the #13#10 (CRLF char literal) string concatenation in MsgBox / Log calls in the Inno [Code] section - Inno 7.x Pascal's runtime dispatcher does not coerce Char to String in multi-term concatenation, raising ETypeMismatch at a function-specific bytecode offset. r4 removes every #13 / #10 char literal from the [Code] section; all user-facing messages are now single-line string literals (no char concatenation), and multi-line output is achieved by issuing several Log() calls instead. Post-install validation still checks the on-disk deliverables (CertMateService.exe, export_pfx.py, updater.py) via FileExists only - no Pascal-side registry access, no named HKEY constant, no typed const, no hex literal, no char-literal concatenation. The [Code] section now uses only trivially-typed Inno primitives: Log, MsgBox, IsAdmin, DirExists, CreateDir, FileExists, ExpandConstant. r4 keeps the self-contained .NET 8 host + PFX/updater tools + docs + service registration + pre/post checks. Upstream v2.55.1 application tree + embedded Python are NOT in this payload (skipped network step on the dev build host); a full end-to-end build (with upstream source + Python 3.12 embeddable staged under {app}\\app and {app}\\python) requires running Build-Release.ps1 on a networked build host."
 }
